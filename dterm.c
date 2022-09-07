@@ -105,6 +105,7 @@ static int spaceparity = 0;	/* Space parity: clear high output bit	*/
 static int backspace = 0;	/* Backspace char, send on BS or DEL 	*/
 static int maplf = 0;		/* If set, map LF to CR 		*/
 static int ignorecr = 0;	/* Ignore carriage returns		*/
+static int addcr = 0;		/* On rx of lf, simulate an incoming cr */
 static int crlf = 0;		/* Send CRLF on CR			*/
 static int istty;		/* Result of isatty()			*/
 static char *connname = 0;	/* Connection name found in config	*/
@@ -145,6 +146,7 @@ help() {
 "del, nodel	Enable / disable mapping of Backspace to Delete\n"
 "maplf, nomaplf	Enable / disable mapping of LF to CR\n"
 "igncr, noigncr	Ignore / output carriage returns\n"
+"addcr, noaddcr	Enable / disable receiving fake CR after each LF\n"
 "crlf, nocrlf	Enable / disable sending LF after each CR\n"
 "delay=<n>	Add delay of <n> ms after each charachter sent\n"
 "crwait=<n>	Add delay of <n> ms after each line sent\n"
@@ -518,6 +520,10 @@ setup(char *s, char *cffile, int cfline) {
 				ignorecr = 1;
 			else if(!strcasecmp(s, "noigncr"))
 				ignorecr = 0;
+			else if(!strcasecmp(s, "addcr"))
+				addcr = 1;
+			else if(!strcasecmp(s, "noaddcr"))
+				addcr = 0;
 			else if(!strcasecmp(s, "crlf"))
 				crlf = 1;
 			else if(!strcasecmp(s, "nocrlf"))
@@ -965,12 +971,13 @@ main(int argc, char **argv) {
 						   || (c > '~' && c < 160))
 							break;
 					}
+
 					if(j) WRITE(1, s, j);
 					if(j >= i)
 						break;
 					if(c == '\r' && ignorecr) {
 						/* Do nothing */
-					}
+                    }
 					else if(c < 32 && showspecial != 2) {
 						cbuf[0] = '^';
 						cbuf[1] = c + '@';
@@ -982,6 +989,7 @@ main(int argc, char **argv) {
 						sprintf(cbuf, "[%02x]", c);
 						WRITE(1, cbuf, 4);
 					}
+
 					j++;
 					s += j;
 					i -= j;
@@ -995,7 +1003,13 @@ main(int argc, char **argv) {
 							buf[j++] = *s;
 					i = j;
 				}			
-				WRITE(1, buf, i);
+
+                for (int x = 0; x < i; x++) {
+                    if (buf[x] == '\n') {
+                        WRITE(1, "\r", 1);
+                    }
+                    WRITE(1, &buf[x], 1);
+                }
 			}
 		}
 
